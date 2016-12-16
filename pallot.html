@@ -1,0 +1,181 @@
+<html>
+<head>
+  <script src="processing.js"></script>
+</head>
+<body>
+
+<p><canvas id="canvas1" width="200" height="200"></canvas></p>
+
+<script id="script1" type="text/javascript">
+
+// Simple way to attach js code to the canvas is by using a function
+function sketchProc(processing) {
+	var w = 500;
+	var h = 500;
+	processing.width = w;
+	processing.height = h;
+	var lastTime = processing.millis();
+	
+	var n = 1 + Math.random()*10;
+	var balls = [];
+	for (var i = 0; i < n; i++)
+	{
+		var r = 5.0 + Math.random()*50.0;
+		var x = r + Math.random()*(w-2*r);
+		var y = r + Math.random()*(h-2*r);
+		var vx = Math.random()*0.2;
+		var vy = Math.random()*0.2;
+		var red = Math.random()*255;
+		var green = Math.random()*255;
+		var blue = Math.random()*255;
+		var ball = new Ball(x, y, r, vx, vy, red, green, blue);
+		balls.push(ball);
+	}
+	
+	processing.mouseClicked = function()
+	{
+		var xm = processing.mouseX;
+		var ym = processing.mouseY;
+		for (var i = balls.length - 1; i >= 0; i--)
+		{
+			var ball = balls[i];
+			var xi = ball.x;
+			var yi = ball.y;
+			var ri = ball.r;
+			if ((xm-xi)*(xm-xi) + (ym-yi)*(ym-yi) <= ri*ri)
+			{
+				balls.splice(i,1);
+				var ball1 = new Ball(xi-ri/2, yi-ri/2, ri/2, ball.vx, ball.vy, ball.red, ball.green, ball.blue);
+				var ball2 = new Ball(xi+ri/2, yi+ri/2, ri/2, ball.vx, ball.vy, ball.red, ball.green, ball.blue);
+				balls.push(ball1);
+				balls.push(ball2);
+				return;
+			}
+		}
+	}
+	
+  // Override draw function, by default it will be called 60 times per second
+  processing.draw = function() {
+	var time = processing.millis();
+	var dt = time - lastTime;
+	lastTime = time;
+  
+	for (var i = 0; i < balls.length; i++)
+	{
+		balls[i].updateBallsHit();
+		balls[i].move(dt);
+		balls[i].reactWall();
+	}
+	for (var i = 0; i < balls.length; i++)
+	{
+		for (var j = i+1; j < balls.length; j++)
+		{
+			balls[i].reactBall(balls[j]);
+		}
+	}
+	// erase background
+    processing.background(200);
+	for (var i = 0; i < balls.length; i++)
+	{
+		balls[i].draw();
+	}
+  };
+  
+  function Ball(x,y,r,vx,vy,red,green,blue)
+  {
+	this.x = x;
+	this.y = y;
+	this.r = r;
+	this.vx = vx;
+	this.vy = vy;
+	this.mass = r*r*r;
+	this.ballsHit = [];
+	this.red = red;
+	this.green = green;
+	this.blue = blue;
+  }
+  Ball.prototype.getV = function()
+  {
+	return Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+  }
+  Ball.prototype.updateBallsHit = function()
+  {
+	var i = 0;
+	while (i < this.ballsHit.length)
+	{
+		if (this.hits(this.ballsHit[i]))
+			i++;
+		else
+			this.ballsHit.splice(i,1);
+	}
+  }
+  Ball.prototype.move = function(dt)
+  {
+	this.x += this.vx * dt;
+	this.y += this.vy * dt;
+  }
+  Ball.prototype.reactWall = function()
+  {
+    if (this.x <= this.r)
+      this.vx = Math.abs(this.vx);
+    if (this.x >= w - this.r)
+      this.vx = -Math.abs(this.vx);
+    if (this.y <= this.r)
+      this.vy = Math.abs(this.vy);
+    if (this.y >= h - this.r)
+      this.vy = -Math.abs(this.vy);
+  }
+  Ball.prototype.hits = function(other)
+  {
+    return (this.x-other.x)*(this.x-other.x)+(this.y-other.y)*(this.y-other.y) <= (this.r+other.r)*(this.r+other.r);
+  }
+  Ball.prototype.reactBall = function(other)
+  {
+    if (this.hits(other) && this.ballsHit.length == 0 && other.ballsHit.length == 0)
+    {
+		this.ballsHit.push(other);
+		other.ballsHit.push(this);
+	
+		var m1 = this.mass;
+		var m2 = other.mass;
+		var x1 = this.x;
+		var y1 = this.y;
+		var x2 = other.x;
+		var y2 = other.y;
+		var v1xa = this.vx;
+		var v1ya = this.vy;
+		var v2xa = other.vx;
+		var v2ya = other.vy;
+		
+		// Mathematica
+		var v1xl = (m2*(2*(x1 - x2)*(v2xa*(x1 - x2) - (v1ya - v2ya)*(y1 - y2)) + v1xa*(-x1*x1 + 2*x1*x2 - x2*x2 + (y1 - y2)*(y1 - y2))) + m1*v1xa*(x1*x1 - 2*x1*x2 + x2*x2 + (y1 - y2)*(y1 - y2))) / ((m1 + m2)*(x1*x1 - 2*x1*x2 + x2*x2 + (y1 - y2)*(y1 - y2)));
+		var v1yl = v1ya - (y1 - y2)*(v1xa - v1xl) / (x1 - x2);
+		var v2xl = (m1*v1xa + m2*v2xa - m1*v1xl) / m2;
+		var v2yl = (m1*v1ya + m2*v2ya - m1*v1yl) / m2;
+		
+		this.vx = v1xl;
+		this.vy = v1yl;
+		other.vx = v2xl;
+		other.vy = v2yl;
+    }
+  }
+  Ball.prototype.draw = function()
+  {
+		var n = 20;
+		for (var i = 1; i <= n; i++)
+		{
+			processing.stroke(this.red*i/n, this.green*i/n, this.blue*i/n);
+			processing.fill(this.red*i/n, this.green*i/n, this.blue*i/n);
+			processing.ellipse(this.x, this.y, 2*this.r*(n-i)/(n-1), 2*this.r*(n-i)/(n-1));
+		}
+  };
+  
+}
+
+var canvas = document.getElementById("canvas1");
+// attaching the sketchProc function to the canvas
+var p = new Processing(canvas, sketchProc);
+// p.exit(); to detach it
+</script>
+</body>
+</html>
